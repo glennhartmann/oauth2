@@ -1,0 +1,13 @@
+[package]
+name = "oauth2-cli"
+version = "0.0.2"
+edition = "2024"
+
+[dependencies]
+oauth2 = { path = ".." }
+
+clap = { version = "4.6.6", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
+chrono = "0.4.45"
