@@ -28,9 +28,7 @@ pub async fn serve_async(listen_port: u16) -> anyhow::Result<crate::AuthResponse
 
     let listener = TcpListener::bind(format!("localhost:{}", listen_port)).await?;
     axum::serve(listener, app)
-        .with_graceful_shutdown((async move || {
-            shutdown_rx.await.expect("error awaiting shutdown_rx")
-        })())
+        .with_graceful_shutdown(async { shutdown_rx.await.expect("error awaiting shutdown_rx") })
         .await?;
 
     Ok(response_rx.await?)

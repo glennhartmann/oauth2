@@ -2,7 +2,6 @@ mod http_server;
 
 use std::str::from_utf8;
 
-use base64_url;
 use chrono::DateTime;
 use rand::{
     SeedableRng, TryRng,
@@ -202,7 +201,7 @@ impl Oauth2 {
         self.code = Some(r.code);
 
         let request = self.get_exchange_request()?;
-        Ok(self.send_exchange_request(request).await?)
+        self.send_exchange_request(request).await
     }
 
     /// The third and final part of the `auth` flow. Handles the Token Exchange response.
@@ -232,7 +231,7 @@ impl Oauth2 {
     /// See https://developers.google.com/identity/protocols/oauth2/native-app#offline.
     pub async fn refresh(&self) -> anyhow::Result<reqwest::Response> {
         let request = self.get_refresh_request()?;
-        Ok(self.send_refresh_request(request).await?)
+        self.send_refresh_request(request).await
     }
 
     /// The second and final part of the `refresh` flow. Handles the refresh response.
@@ -262,8 +261,8 @@ impl Oauth2 {
         const CODE_VERIFIER_LEN: usize = 128;
         let mut rng = StdRng::try_from_rng(&mut SysRng)?;
         let mut verifier = [0; CODE_VERIFIER_LEN];
-        for i in 0..CODE_VERIFIER_LEN {
-            verifier[i] = ALPHABET[usize::try_from(rng.try_next_u32()?)? % ALPHABET_LEN];
+        for item in verifier.iter_mut().take(CODE_VERIFIER_LEN) {
+            *item = ALPHABET[usize::try_from(rng.try_next_u32()?)? % ALPHABET_LEN];
         }
         Ok(from_utf8(&verifier)?.to_string())
     }
