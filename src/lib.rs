@@ -5,8 +5,8 @@ use std::str::from_utf8;
 use base64_url;
 use chrono::DateTime;
 use rand::{
-    rngs::{StdRng, SysRng},
     SeedableRng, TryRng,
+    rngs::{StdRng, SysRng},
 };
 use reqwest::Url;
 use serde::{Deserialize, Serialize};

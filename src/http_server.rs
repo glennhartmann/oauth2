@@ -1,8 +1,9 @@
 use std::sync::{Arc, Mutex};
 
 use axum::{
+    Router,
     extract::{Query, State},
-    routing, Router,
+    routing,
 };
 use tokio::{net::TcpListener, sync::oneshot};
 
