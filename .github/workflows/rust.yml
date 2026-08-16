@@ -7,7 +7,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   # Make sure CI fails on all warnings, including Clippy lints
-  # RUSTFLAGS: "-Dwarnings"
+  RUSTFLAGS: "-Dwarnings"
 
 jobs:
   build:

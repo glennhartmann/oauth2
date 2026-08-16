@@ -89,9 +89,8 @@ struct ExchangeResponse {
 
     /// The authorized scope for the access and refresh tokens.
     scope: String,
-
-    /// This should always be "Bearer".
-    token_type: String,
+    // This should always be "Bearer".
+    // token_type: String, // TODO: parse and check this
 }
 
 /// The tokens returned from the Token Exchange part of the `auth` flow.
@@ -124,9 +123,8 @@ struct RefreshResponse {
 
     /// The API scope that the `access_token` is valid for.
     scope: String,
-
-    /// Should always be "Bearer".
-    token_type: String,
+    // Should always be "Bearer".
+    // token_type: String, // TODO: parse and check this
 }
 
 /// The token returned by the `refresh` flow.
