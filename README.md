@@ -20,3 +20,7 @@ employers._
 Pretty rough. No tests, unhelpful errors, no server error handling to speak of.
 This is a very early iteration and generally should not be used in its current
 state.
+
+## Creating OAuth2 Credentials
+
+See [create-client README](doc/create-client/README.md).
