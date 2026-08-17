@@ -18,8 +18,32 @@
             lockFile = ./Cargo.lock;
           };
         };
+        cli-manifest = (pkgs.lib.importTOML ./cli/Cargo.toml).package;
+        oauth2-cli = pkgs.rustPlatform.buildRustPackage {
+          pname = cli-manifest.name;
+          version = cli-manifest.version;
+          src = builtins.path { path = ./cli; name = "oauth2-cli"; };
+
+          cargoLock = {
+            lockFile = ./cli/Cargo.lock;
+
+            outputHashes = {
+              "oauth2-0.0.2" = "sha256-ltguj0sgOmeCXws+JIaVI5+f4rk1IVZKSCoAX/acN74=";
+            };
+          };
+        };
+        all = pkgs.symlinkJoin {
+          name = "all";
+          paths = [
+            oauth2
+            oauth2-cli
+          ];
+        };
         oauth2-shell = pkgs.mkShell {
-          inputsFrom = [ oauth2 ];
+          inputsFrom = [
+            oauth2
+            oauth2-cli
+          ];
           packages = with pkgs; [
             clippy
             rustfmt
@@ -28,8 +52,8 @@
       in
       {
         packages = {
-          inherit oauth2;
-          default = oauth2;
+          inherit oauth2 oauth2-cli all;
+          default = all;
         };
         devShells = {
           inherit oauth2-shell;

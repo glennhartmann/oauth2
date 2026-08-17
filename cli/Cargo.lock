@@ -944,6 +944,7 @@ dependencies = [
 [[package]]
 name = "oauth2"
 version = "0.0.2"
+source = "git+https://github.com/glennhartmann/oauth2.git?tag=v0.0.2-without-nix#f6042f71ea5cfc3609f3f4fdeee842a6ed22c121"
 dependencies = [
  "anyhow",
  "axum",
