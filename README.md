@@ -24,3 +24,8 @@ state.
 ## Creating OAuth2 Credentials
 
 See [create-client README](doc/create-client/README.md).
+
+## Subprojects
+
+* [oauth2-cli](cli): A small CLI program to use the library. Can be used as an
+  API example for the library.
