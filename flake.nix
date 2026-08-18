@@ -53,7 +53,7 @@
       {
         packages = {
           inherit oauth2 oauth2-cli all;
-          default = all;
+          default = oauth2;
         };
         devShells = {
           inherit oauth2-shell;

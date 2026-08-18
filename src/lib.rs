@@ -1,6 +1,6 @@
 mod http_server;
 
-use std::str::from_utf8;
+use std::{str::from_utf8, time::Duration};
 
 use chrono::DateTime;
 use rand::{
@@ -39,25 +39,6 @@ pub struct Cfg {
     pub refresh_token: Option<String>,
 }
 
-/// The main oauth object. There are 2 main flows you might want to use it for: `auth` or
-/// `refresh`.
-pub struct Oauth2 {
-    /// The client's configuration.
-    cfg: Cfg,
-
-    /// The cryptographically randomly-generated "code verifier" for the challenge-response process.
-    code_verifier: Option<String>,
-
-    /// The hashed and encoded `code_verifier`.
-    code_challenge: Option<String>,
-
-    /// The `state` parameter for the Oauth flow. Here used as a CSRF token.
-    state: Option<String>,
-
-    /// The `code` returned by the Oauth server.
-    code: Option<String>,
-}
-
 /// The response from the initial step of the `auth` flow (user authorization).
 #[derive(Debug, Deserialize)]
 pub struct AuthResponse {
@@ -93,8 +74,8 @@ struct ExchangeResponse {
 }
 
 /// The tokens returned from the Token Exchange part of the `auth` flow.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct TokenExchangeResult {
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Tokens {
     /// The new access token returned by the Oauth server. This can be used to call APIs.
     pub access_token: String,
 
@@ -109,6 +90,15 @@ pub struct TokenExchangeResult {
 
     /// The authorized scope for the access and refresh tokens.
     pub scope: String,
+}
+
+impl Tokens {
+    /// Merges the `Tokens` data with a `RefreshResult`. The latter takes precedence.
+    pub fn merge(&mut self, refresh_result: &RefreshResult) {
+        self.access_token = refresh_result.access_token.clone();
+        self.expires_at = refresh_result.expires_at;
+        self.scope = refresh_result.scope.clone();
+    }
 }
 
 /// The (internal) response from the `refresh` flow.
@@ -139,6 +129,56 @@ pub struct RefreshResult {
     pub scope: String,
 }
 
+/// Client info JSON struct, as created by the Google Cloud Console.
+#[derive(Deserialize)]
+pub struct ClientInfo {
+    pub installed: InstalledClientInfo,
+}
+
+/// Client info JSON sub-struct.
+#[derive(Deserialize)]
+pub struct InstalledClientInfo {
+    /// Google Cloud client ID.
+    pub client_id: String,
+
+    /// Google Cloud project ID.
+    pub project_id: String,
+
+    /// URL of the auth server.
+    pub auth_uri: String,
+
+    /// URL of the token server.
+    pub token_uri: String,
+
+    /// URL of x509 certificates.
+    pub auth_provider_x509_cert_url: String,
+
+    /// Google Cloud client secret.
+    pub client_secret: String,
+
+    /// List of allowed redirect URLs.
+    pub redirect_uris: Vec<String>,
+}
+
+/// The main oauth object. There are 2 main flows you might want to use it for: `auth` or
+/// `refresh`.
+pub struct Oauth2 {
+    /// The client's configuration.
+    cfg: Cfg,
+
+    /// The cryptographically randomly-generated "code verifier" for the challenge-response process.
+    code_verifier: Option<String>,
+
+    /// The hashed and encoded `code_verifier`.
+    code_challenge: Option<String>,
+
+    /// The `state` parameter for the Oauth flow. Here used as a CSRF token.
+    state: Option<String>,
+
+    /// The `code` returned by the Oauth server.
+    code: Option<String>,
+}
+
 impl Oauth2 {
     /// Creates a new `Oauth2` object.
     pub fn new(cfg: Cfg) -> Self {
@@ -155,7 +195,7 @@ impl Oauth2 {
     /// and starts an http server to listen for the initial user authorization response.
     ///
     /// See
-    /// https://developers.google.com/identity/protocols/oauth2/native-app#step-2:-send-a-request-to-googles-oauth-2.0-server.
+    /// <https://developers.google.com/identity/protocols/oauth2/native-app#step-2:-send-a-request-to-googles-oauth-2.0-server>.
     ///
     /// `await`ing the returned `Future` will block until the http server receives a response. The
     /// http server will shut down gracefully upon receiving its first response.
@@ -179,7 +219,7 @@ impl Oauth2 {
     /// `access_token` and a `refresh_token`.
     ///
     /// See
-    /// https://developers.google.com/identity/protocols/oauth2/native-app#exchange-authorization-code.
+    /// <https://developers.google.com/identity/protocols/oauth2/native-app#exchange-authorization-code>.
     pub async fn auth_exchange(&mut self, r: AuthResponse) -> anyhow::Result<reqwest::Response> {
         let self_state = self
             .state
@@ -208,16 +248,16 @@ impl Oauth2 {
     pub async fn auth_handle_exchange_response(
         &self,
         r: reqwest::Response,
-    ) -> anyhow::Result<TokenExchangeResult> {
+    ) -> anyhow::Result<Tokens> {
         let j = r.json::<ExchangeResponse>().await?;
 
         let now = chrono::Local::now();
-        let expires_in = std::time::Duration::from_secs(u64::from(j.expires_in) - 5u64);
+        let expires_in = Duration::from_secs(u64::from(j.expires_in) - 5u64);
         let refresh_token_expires_in = j
             .refresh_token_expires_in
-            .map(|ei| std::time::Duration::from_secs(u64::from(ei) - 5u64));
+            .map(|ei| Duration::from_secs(u64::from(ei) - 5u64));
 
-        Ok(TokenExchangeResult {
+        Ok(Tokens {
             access_token: j.access_token,
             expires_at: now + expires_in,
             refresh_token: j.refresh_token,
@@ -228,7 +268,7 @@ impl Oauth2 {
 
     /// The first step of the `refresh` flow. Sends a request to the token server.
     ///
-    /// See https://developers.google.com/identity/protocols/oauth2/native-app#offline.
+    /// See <https://developers.google.com/identity/protocols/oauth2/native-app#offline>.
     pub async fn refresh(&self) -> anyhow::Result<reqwest::Response> {
         let request = self.get_refresh_request()?;
         self.send_refresh_request(request).await
@@ -242,7 +282,7 @@ impl Oauth2 {
         let j = resp.json::<RefreshResponse>().await?;
 
         let now = chrono::Local::now();
-        let expires_in = std::time::Duration::from_secs(u64::from(j.expires_in) - 5u64);
+        let expires_in = Duration::from_secs(u64::from(j.expires_in) - 5u64);
 
         Ok(RefreshResult {
             access_token: j.access_token,

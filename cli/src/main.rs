@@ -1,5 +1,7 @@
 use std::{fs::read_to_string, path::PathBuf};
 
+use oauth2::ClientInfo;
+
 use chrono::DateTime;
 use clap::{Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
@@ -58,41 +60,6 @@ enum OutputMode {
     Json,
 }
 
-/// Client info JSON struct, as created by the Google Cloud Console.
-#[derive(Deserialize)]
-struct ClientInfo {
-    installed: InstalledClientInfo,
-}
-
-/// Client info JSON sub-struct.
-#[derive(Deserialize)]
-struct InstalledClientInfo {
-    /// Google Cloud client ID.
-    client_id: String,
-
-    /// Google Cloud project ID.
-    #[allow(dead_code)]
-    project_id: String,
-
-    /// URL of the auth server.
-    auth_uri: String,
-
-    /// URL of the token server.
-    token_uri: String,
-
-    /// URL of x509 certificates.
-    #[allow(dead_code)]
-    auth_provider_x509_cert_url: String,
-
-    /// Google Cloud client secret.
-    client_secret: String,
-
-    // TODO: check that this includes localhost
-    /// List of allowed redirect URLs.
-    #[allow(dead_code)]
-    redirect_uris: Vec<String>,
-}
-
 /// Output JSON struct containing tokens and associated metadata.
 #[derive(Serialize, Deserialize, Debug)]
 struct Tokens {
@@ -148,8 +115,8 @@ async fn main() {
 
     let client_info =
         read_to_string(&args.client_info_path).expect("couldn't read from `client_info_path`");
-    let client_info: ClientInfo = serde_json::from_str::<ClientInfo>(&client_info)
-        .expect("couldn't parse `client_info` JSON");
+    let client_info: ClientInfo =
+        serde_json::from_str(&client_info).expect("couldn't parse `client_info` JSON");
 
     match &args.command {
         Command::Init { listen_port, scope } => init(&args, client_info, *listen_port, scope).await,
@@ -157,7 +124,7 @@ async fn main() {
     };
 }
 
-/// Performs the initialization flow to create new `Tokens` data from a `ClientInfo`.
+/// Performs the initialization flow to create new `Tokens` data from an `oauth2::ClientInfo`.
 async fn init(args: &Args, client_info: ClientInfo, listen_port: u16, scope: &str) {
     let mut oa2 = oauth2::Oauth2::new(oauth2::Cfg {
         listen_port: Some(listen_port),
@@ -228,11 +195,7 @@ async fn init(args: &Args, client_info: ClientInfo, listen_port: u16, scope: &st
 /// Performs the refresh flow to get new `Tokens` data from a refresh token.
 async fn refresh(args: &Args, client_info: ClientInfo, tokens_path: &PathBuf) {
     let tokens = read_to_string(tokens_path).expect("couldn't read from `tokens_path`");
-    let tokens: Tokens = serde_json::from_str(&tokens).expect("couldn't parse tokens JSON");
-
-    let refresh_token = tokens
-        .refresh_token
-        .expect("no refresh token found in JSON");
+    let tokens: oauth2::Tokens = serde_json::from_str(&tokens).expect("couldn't parse tokens JSON");
 
     let oa2 = oauth2::Oauth2::new(oauth2::Cfg {
         listen_port: None,
@@ -241,7 +204,7 @@ async fn refresh(args: &Args, client_info: ClientInfo, tokens_path: &PathBuf) {
         auth_server_url: None,
         token_server_url: client_info.installed.token_uri,
         client_secret: client_info.installed.client_secret,
-        refresh_token: Some(refresh_token.clone()),
+        refresh_token: Some(tokens.refresh_token.clone()),
     });
 
     // Get a new access token from a refresh token.
@@ -267,7 +230,7 @@ async fn refresh(args: &Args, client_info: ClientInfo, tokens_path: &PathBuf) {
                     args.terse,
                     new_token_result.access_token,
                     Some(new_token_result.expires_at),
-                    Some(refresh_token),
+                    Some(tokens.refresh_token),
                     tokens.refresh_token_expires_at,
                     Some(new_token_result.scope),
                 ))

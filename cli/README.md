@@ -3,6 +3,8 @@
 This is a small CLI project that demonstrates how to use the `oauth2` library.
 It can also be used as a way for non-Rust applications to use the library.
 
+[Rust Docs](https://glennhartmann.github.io/oauth2/cli/v0.0.3/oauth2_cli/index.html)
+
 ## Installing
 
 ```bash
