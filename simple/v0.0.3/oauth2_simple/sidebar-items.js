@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_CFG"],"struct":["Cfg","CfgOverride","Oauth2Simple"]};
