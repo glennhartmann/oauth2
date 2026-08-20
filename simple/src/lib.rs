@@ -9,57 +9,25 @@ use std::{
 
 use oauth2::{ClientInfo, Oauth2, Tokens};
 
+use bon::Builder;
+
 const TOKENS_UNSET_ERROR_STR: &str = "`tokens` is unset. Did you run `init()`?";
 
-/// Config struct for `Oauth2Simple::with_cfg()`.
+/// Config struct for `Oauth2Simple::with_cfg()`. Using `Cfg::builder()` allows clients to start
+/// with a default config and just override the parts they want (`scope` is required, though).
+#[derive(Builder)]
 pub struct Cfg<'a> {
     /// Path to a "client info" JSON file.
+    #[builder(default = "./client_info.json")]
     pub client_info_path: &'a str,
 
     /// Path to a tokens JSON file.
+    #[builder(default = "./token.json")]
     pub tokens_path: &'a str,
 
     /// Port for the http server to listen on.
+    #[builder(default = 42684)]
     pub port: u16,
-
-    /// OAuth2 API scope to authorize.
-    pub scope: &'a str,
-}
-
-impl<'a> Cfg<'a> {
-    /// Merge a `Cfg` with a `CfgOverride`. The latter takes precedence.
-    fn merge(self, other: &CfgOverride<'a>) -> Self {
-        Self {
-            client_info_path: other.client_info_path.unwrap_or(self.client_info_path),
-            tokens_path: other.tokens_path.unwrap_or(self.tokens_path),
-            port: other.port.unwrap_or(self.port),
-            scope: other.scope,
-        }
-    }
-}
-
-/// Default `Cfg` values. Typically a client creates a `CfgOverride` with only certain fields set
-/// to `Some` values, then calls `DEFAULT_CFG.merge()` on their `CfgOverride` to get a full `Cfg`
-/// instance they can use.
-pub const DEFAULT_CFG: Cfg = Cfg {
-    client_info_path: "./client_info.json",
-    tokens_path: "./token.json",
-    port: 42684,
-    scope: "",
-};
-
-/// `Cfg` struct, but with some `Option` values. The idea is that `CfgOverride` can have only
-/// certain values filled in, and then use `Cfg::merge()` to override only those values of the
-/// `Cfg` instance.
-pub struct CfgOverride<'a> {
-    /// Path to a "client info" JSON file.
-    pub client_info_path: Option<&'a str>,
-
-    /// Path to a tokens JSON file.
-    pub tokens_path: Option<&'a str>,
-
-    /// Port for the http server to listen on.
-    pub port: Option<u16>,
 
     /// OAuth2 API scope to authorize.
     pub scope: &'a str,
@@ -82,26 +50,20 @@ impl Oauth2Simple {
     /// will be created when calling `init()`. `refresh()` should only be called if `tokens_path`
     /// already exists or after `init()` is called.
     pub fn new(client_info_path: &Path, tokens_path: &Path, scope: &str) -> anyhow::Result<Self> {
-        let cfgo = CfgOverride {
-            client_info_path: Some(
+        let cfg = Cfg::builder()
+            .client_info_path(
                 client_info_path
                     .to_str()
                     .ok_or(anyhow::anyhow!("client_info_path is invalid"))?,
-            ),
-            tokens_path: Some(
+            )
+            .tokens_path(
                 tokens_path
                     .to_str()
                     .ok_or(anyhow::anyhow!("tokens_path is invalid"))?,
-            ),
-            port: None,
-            scope,
-        };
-        Self::from_default(&cfgo)
-    }
-
-    /// Make a new instance from `DEFAULT_CFG`, but with given values overridden from `cfgo`.
-    pub fn from_default(cfgo: &CfgOverride) -> anyhow::Result<Self> {
-        Self::with_cfg(DEFAULT_CFG.merge(cfgo))
+            )
+            .scope(scope)
+            .build();
+        Self::with_cfg(cfg)
     }
 
     /// Make a new instance with the given `Cfg`.

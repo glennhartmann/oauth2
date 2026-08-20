@@ -9,3 +9,4 @@ oauth2 = { path = ".." }
 anyhow = "1.0.104"
 chrono = "0.4.45"
 serde_json = "1.0.151"
+bon = "3.9.3"
