@@ -13,9 +13,16 @@ const TOKENS_UNSET_ERROR_STR: &str = "`tokens` is unset. Did you run `init()`?";
 
 /// Config struct for `Oauth2Simple::with_cfg()`.
 pub struct Cfg<'a> {
+    /// Path to a "client info" JSON file.
     pub client_info_path: &'a str,
+
+    /// Path to a tokens JSON file.
     pub tokens_path: &'a str,
+
+    /// Port for the http server to listen on.
     pub port: u16,
+
+    /// OAuth2 API scope to authorize.
     pub scope: &'a str,
 }
 
@@ -45,16 +52,28 @@ pub const DEFAULT_CFG: Cfg = Cfg {
 /// certain values filled in, and then use `Cfg::merge()` to override only those values of the
 /// `Cfg` instance.
 pub struct CfgOverride<'a> {
+    /// Path to a "client info" JSON file.
     pub client_info_path: Option<&'a str>,
+
+    /// Path to a tokens JSON file.
     pub tokens_path: Option<&'a str>,
+
+    /// Port for the http server to listen on.
     pub port: Option<u16>,
+
+    /// OAuth2 API scope to authorize.
     pub scope: &'a str,
 }
 
 /// Main struct for this library. Wraps an `oauth2::Oauth2`.
 pub struct Oauth2Simple {
+    /// The underlying `oauth2::Oauth2` struct with the actual logic.
     oauth2: Oauth2,
+
+    /// Path to a tokens JSON file.
     tokens_path: String,
+
+    /// Access and refresh token data.
     tokens: Option<Tokens>,
 }
 
