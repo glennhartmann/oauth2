@@ -46,20 +46,17 @@
             };
           };
         };
+        all-pkgs = [
+            oauth2
+            # oauth2-cli
+            # oauth2-simple
+        ];
         all = pkgs.symlinkJoin {
           name = "all";
-          paths = [
-            oauth2
-            oauth2-cli
-            oauth2-simple
-          ];
+          paths = all-pkgs;
         };
         oauth2-shell = pkgs.mkShell {
-          inputsFrom = [
-            oauth2
-            oauth2-cli
-            oauth2-simple
-          ];
+          inputsFrom = all-pkgs;
           packages = with pkgs; [
             clippy
             rustfmt
