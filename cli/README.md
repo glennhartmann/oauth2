@@ -10,6 +10,7 @@ It can also be used as a way for non-Rust applications to use the library.
 ```bash
 cargo install \
   --git https://github.com/glennhartmann/oauth2.git \
+  --tag v0.0.3 \
   oauth2-cli
 ```
 
