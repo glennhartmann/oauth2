@@ -1,7 +1,8 @@
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::{
     fs::{File, exists, read_to_string},
     io::Write,
-    os::unix::fs::PermissionsExt,
     path::Path,
     time::Duration,
 };
@@ -207,16 +208,18 @@ impl Oauth2Simple {
         self.refresh_if_needed().await
     }
 
-    /// Write a `Tokens` struct out to JSON with correct permissions.
+    /// Write a `Tokens` struct out to JSON with correct permissions (on *nix systems).
     fn write_tokens(&self, tokens: &Tokens) -> anyhow::Result<()> {
         let js = serde_json::to_string_pretty(&tokens)?;
 
         let mut f = File::create(&self.tokens_path)?;
-        let md = f.metadata()?;
 
-        // TODO: support non-*nix platforms
-        let mut perms = md.permissions();
-        perms.set_mode(0o0600);
+        #[cfg(unix)]
+        {
+            let md = f.metadata()?;
+            let mut perms = md.permissions();
+            perms.set_mode(0o600);
+        }
 
         f.write_all(&js.into_bytes())?;
 
