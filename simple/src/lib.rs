@@ -219,6 +219,7 @@ impl Oauth2Simple {
             let md = f.metadata()?;
             let mut perms = md.permissions();
             perms.set_mode(0o600);
+            f.set_permissions(perms)?;
         }
 
         f.write_all(&js.into_bytes())?;
