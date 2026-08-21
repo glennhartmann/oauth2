@@ -28,7 +28,7 @@
             lockFile = ./cli/Cargo.lock;
 
             outputHashes = {
-              "oauth2-0.0.3" = "sha256-4aap4FwENrIZdx8mn1olipljbpbv3FnL4hi90eBn2Dw=";
+              "oauth2-0.0.4" = "sha256-YVYhPRZFMvshaCgHGf9YO9jMAUAigkoM+OyJQZOPjpo=";
             };
           };
         };
@@ -42,14 +42,14 @@
             lockFile = ./simple/Cargo.lock;
 
             outputHashes = {
-              "oauth2-0.0.3" = "sha256-4aap4FwENrIZdx8mn1olipljbpbv3FnL4hi90eBn2Dw=";
+              "oauth2-0.0.4" = "sha256-YVYhPRZFMvshaCgHGf9YO9jMAUAigkoM+OyJQZOPjpo=";
             };
           };
         };
         all-pkgs = [
             oauth2
-            # oauth2-cli
-            # oauth2-simple
+            oauth2-cli
+            oauth2-simple
         ];
         all = pkgs.symlinkJoin {
           name = "all";
