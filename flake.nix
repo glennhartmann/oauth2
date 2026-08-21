@@ -48,8 +48,8 @@
         };
         all-pkgs = [
             oauth2
-            oauth2-cli
-            oauth2-simple
+            # oauth2-cli
+            # oauth2-simple
         ];
         all = pkgs.symlinkJoin {
           name = "all";

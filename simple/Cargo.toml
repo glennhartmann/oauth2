@@ -4,7 +4,7 @@ version = "0.0.4"
 edition = "2024"
 
 [dependencies]
-oauth2 = { git = "https://github.com/glennhartmann/oauth2.git", tag = "v0.0.4-without-nix" }
+oauth2 = { path = ".." }
 
 anyhow = "1.0.104"
 chrono = "0.4.45"
