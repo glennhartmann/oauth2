@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Cfg","CfgBuilder","Oauth2Simple"]};
