@@ -1,3 +1,4 @@
+pub mod dpop;
 mod http_server;
 
 use std::{str::from_utf8, time::Duration};
@@ -202,9 +203,9 @@ impl Oauth2 {
     pub fn auth_get_url_and_listen(
         &mut self,
     ) -> anyhow::Result<(String, impl Future<Output = anyhow::Result<AuthResponse>>)> {
-        self.code_verifier = Some(self.create_code_verifier()?);
+        self.code_verifier = Some(create_code_verifier()?);
         self.code_challenge = Some(self.create_code_challenge()?);
-        self.state = Some(self.create_code_verifier()?);
+        self.state = Some(create_code_verifier()?);
         Ok((
             self.get_auth_request_url()?,
             http_server::serve_async(
@@ -289,22 +290,6 @@ impl Oauth2 {
             expires_at: now + expires_in,
             scope: j.scope,
         })
-    }
-
-    /// Generates a cryptographically-random string using an alphabet of
-    /// {[A-Z] / [a-z] / [0-9] / "-" / "." / "_" / "~"} for the challenge-response mechanism. See
-    /// https://developers.google.com/identity/protocols/oauth2/native-app#create-code-challenge.
-    fn create_code_verifier(&self) -> anyhow::Result<String> {
-        const ALPHABET_LEN: usize = 66;
-        const ALPHABET: &[u8; ALPHABET_LEN] =
-            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-        const CODE_VERIFIER_LEN: usize = 128;
-        let mut rng = StdRng::try_from_rng(&mut SysRng)?;
-        let mut verifier = [0; CODE_VERIFIER_LEN];
-        for item in verifier.iter_mut().take(CODE_VERIFIER_LEN) {
-            *item = ALPHABET[usize::try_from(rng.try_next_u32()?)? % ALPHABET_LEN];
-        }
-        Ok(from_utf8(&verifier)?.to_string())
     }
 
     /// Hashes and encodes the `code_verifier`. See
@@ -430,4 +415,20 @@ impl Oauth2 {
     ) -> anyhow::Result<reqwest::Response> {
         Ok(request.send().await?)
     }
+}
+
+/// Generates a cryptographically-random string using an alphabet of
+/// {[A-Z] / [a-z] / [0-9] / "-" / "." / "_" / "~"} for the challenge-response mechanism. See
+/// https://developers.google.com/identity/protocols/oauth2/native-app#create-code-challenge.
+fn create_code_verifier() -> anyhow::Result<String> {
+    const ALPHABET_LEN: usize = 66;
+    const ALPHABET: &[u8; ALPHABET_LEN] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+    const CODE_VERIFIER_LEN: usize = 128;
+    let mut rng = StdRng::try_from_rng(&mut SysRng)?;
+    let mut verifier = [0; CODE_VERIFIER_LEN];
+    for item in verifier.iter_mut().take(CODE_VERIFIER_LEN) {
+        *item = ALPHABET[usize::try_from(rng.try_next_u32()?)? % ALPHABET_LEN];
+    }
+    Ok(from_utf8(&verifier)?.to_string())
 }
