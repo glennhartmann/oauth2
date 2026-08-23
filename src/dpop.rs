@@ -1,14 +1,12 @@
-use crate::create_code_verifier;
-
 use base64ct::LineEnding;
-use ecdsa::{SigningKey, elliptic_curve::Generate};
+use ecdsa::{Signature, SigningKey, elliptic_curve::Generate, signature::Signer};
 use p256::{
     NistP256, PublicKey, SecretKey,
     elliptic_curve::point::AffineCoordinates,
     pkcs8::{DecodePrivateKey, DecodePublicKey, EncodePrivateKey, EncodePublicKey},
 };
 use rand::{
-    SeedableRng,
+    SeedableRng, TryRng,
     rngs::{StdRng, SysRng},
 };
 use serde::Serialize;
@@ -231,19 +229,23 @@ pub fn create_auth(
     key_data: &KeyData,
     auth_code: &str,
     token_server_url: &str,
-    nonce: Option<&str>,
 ) -> anyhow::Result<String> {
     let jti = &base64_url::encode(&Sha256::digest(auth_code));
-    create(key_data, token_server_url, nonce, jti)
+    create(key_data, token_server_url, None /* nonce */, jti)
 }
 
 /// Creates a DPoP for a refresh request.
 pub fn create_refresh(
     key_data: &KeyData,
     token_server_url: &str,
-    nonce: Option<&str>,
+    nonce: &str,
 ) -> anyhow::Result<String> {
-    create(key_data, token_server_url, nonce, &create_code_verifier()?)
+    create(
+        key_data,
+        token_server_url,
+        Some(nonce),
+        &create_random_jti()?,
+    )
 }
 
 /// Creates a DPoP with the given `jti`, as described at
@@ -263,9 +265,7 @@ pub fn create(
     let encoded_dpop_payload = base64_url::encode(&dpop_payload_json);
 
     let unsigned_dpop = format!("{}.{}", encoded_dpop_header, encoded_dpop_payload);
-    let (signature, _) = key_data
-        .signing_key
-        .sign_recoverable(unsigned_dpop.as_bytes());
+    let signature: Signature<NistP256> = key_data.signing_key.try_sign(unsigned_dpop.as_bytes())?;
     let raw_signature_bytes_struct = signature.to_bytes();
     let raw_signature_bytes = raw_signature_bytes_struct.as_slice();
 
@@ -273,4 +273,14 @@ pub fn create(
     let dpop = format!("{}.{}", unsigned_dpop, encoded_raw_signature);
 
     Ok(dpop)
+}
+
+/// Generate 128 cryptographically random bytes, then Base64URL-encode them. The JTI appears to
+/// accept only characters within the base64 alphabet, despite there being no documentation to that
+/// effect.
+fn create_random_jti() -> anyhow::Result<String> {
+    let mut rng = StdRng::try_from_rng(&mut SysRng)?;
+    let mut jti = [0; 128];
+    rng.try_fill_bytes(&mut jti);
+    Ok(base64_url::encode(&jti))
 }
