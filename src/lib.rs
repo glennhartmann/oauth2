@@ -367,6 +367,11 @@ impl Oauth2 {
         ))
     }
 
+    /// Manually set a new DPoP nonce value.
+    pub fn set_dpop_nonce(&mut self, dpop_nonce: &str) {
+        self.cfg.dpop_nonce = Some(dpop_nonce.to_string());
+    }
+
     /// Hashes and encodes the `code_verifier`. See
     /// https://developers.google.com/identity/protocols/oauth2/native-app#create-code-challenge.
     fn create_code_challenge(&self) -> anyhow::Result<String> {

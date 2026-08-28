@@ -18,7 +18,11 @@ Or use [nix](https://nixos.org/).
 
 ## Basic Usage
 
-`oauth2-cli` comes witih 2 commands: `init` and `refresh`.
+`oauth2-cli` comes witih 3 commands: `generate-dpop-keys`, `init` and
+`refresh`.
+
+`generate-dpop-keys` is an optional step to create cryptographic keys for use
+in the [DPoP](https://oauth.net/2/dpop/) in later commands for extra security.
 
 `init` is used the first time you want to generate credentials, and includes a
 step for the user to authorize the API usage.
@@ -30,8 +34,9 @@ If you plan to be able to refresh your initial access token, you will likely
 want to save the `init` JSON output to a file:
 
 ```bash
-oauth2-cli -o json \
-  init --scope "${SCOPE}" \
+oauth2-cli init \
+  -o json \
+  --scope "${SCOPE}" \
   > token.json
 ```
 
@@ -41,8 +46,11 @@ contains sensitive credentials.
 You'll also want to similarly store the JSON output of the `refresh` command
 when that time comes.
 
-For detailed usage, run `oauth2-cli --help`, `oauth2-cli init --help`, and
-`oauth2-cli refresh --help`.
+For detailed usage, run `oauth2-cli --help`, `oauth2-cli generate-dpop-keys
+--help`, `oauth2-cli init --help`, and `oauth2-cli refresh --help`.
+
+For `init` and `refresh`, to use a DPoP, point `--public-key-path` and
+`--private-key-path` to the keys generated with `generate-dpop-keys`.
 
 ## Status
 

@@ -1098,6 +1098,7 @@ dependencies = [
 name = "oauth2-cli"
 version = "0.0.4"
 dependencies = [
+ "anyhow",
  "chrono",
  "clap",
  "oauth2",
