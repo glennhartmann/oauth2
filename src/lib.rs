@@ -3,6 +3,8 @@ mod http_server;
 
 use std::{str::from_utf8, time::Duration};
 
+use dpop::KeyData;
+
 use chrono::DateTime;
 use rand::{
     SeedableRng, TryRng,
@@ -38,6 +40,13 @@ pub struct Cfg {
     /// Refresh token, from the last time you went through the `auth` flow. Required to go through
     /// the `refresh` flow.
     pub refresh_token: Option<String>,
+
+    /// Cryptographic key data for signing DPoPs. If omitted, a DPoP will not be used (this is less
+    /// secure).
+    pub key_data: Option<KeyData>,
+
+    /// DPoP nonce previously returned from the server, if applicable.
+    pub dpop_nonce: Option<String>,
 }
 
 /// The response from the initial step of the `auth` flow (user authorization).
@@ -91,6 +100,10 @@ pub struct Tokens {
 
     /// The authorized scope for the access and refresh tokens.
     pub scope: String,
+
+    /// DPoP nonce returned from the server, if applicable. Should be provided and sent to the
+    /// server for the next request.
+    pub dpop_nonce: Option<String>,
 }
 
 impl Tokens {
@@ -99,12 +112,13 @@ impl Tokens {
         self.access_token = refresh_result.access_token.clone();
         self.expires_at = refresh_result.expires_at;
         self.scope = refresh_result.scope.clone();
+        self.dpop_nonce = refresh_result.dpop_nonce.clone();
     }
 }
 
-/// The (internal) response from the `refresh` flow.
+/// The (internal) response from the `refresh` flow, if successful.
 #[derive(Deserialize, Debug)]
-struct RefreshResponse {
+struct RefreshResponseSuccess {
     /// The new access token.
     access_token: String,
 
@@ -115,6 +129,16 @@ struct RefreshResponse {
     scope: String,
     // Should always be "Bearer".
     // token_type: String, // TODO: parse and check this
+}
+
+/// JSON error returned from the server for bad refresh requests.
+#[derive(Deserialize, Debug)]
+struct RefreshResponseError {
+    /// Short error code string.
+    error: String,
+
+    /// Longer explanation of what went wrong.
+    error_description: String,
 }
 
 /// The token returned by the `refresh` flow.
@@ -128,11 +152,15 @@ pub struct RefreshResult {
 
     /// The authorized scope for the new `access_token`.
     pub scope: String,
+
+    /// DPoP nonce returned by the server, if applicable.
+    pub dpop_nonce: Option<String>,
 }
 
 /// Client info JSON struct, as created by the Google Cloud Console.
 #[derive(Deserialize)]
 pub struct ClientInfo {
+    /// The real client info is nested under this field.
     pub installed: InstalledClientInfo,
 }
 
@@ -250,6 +278,13 @@ impl Oauth2 {
         &self,
         r: reqwest::Response,
     ) -> anyhow::Result<Tokens> {
+        let dpop_nonce =
+            try_get_dpop_nonce(&r).map_err(RefreshHandleResponseError::TryGetDpopNonce)?;
+
+        if self.cfg.key_data.is_some() && dpop_nonce.is_none() {
+            anyhow::bail!("we sent a DPoP in the request, but didn't receive a nonce back");
+        }
+
         let j = r.json::<ExchangeResponse>().await?;
 
         let now = chrono::Local::now();
@@ -264,6 +299,7 @@ impl Oauth2 {
             refresh_token: j.refresh_token,
             refresh_token_expires_at: refresh_token_expires_in.map(|ei| now + ei),
             scope: j.scope,
+            dpop_nonce,
         })
     }
 
@@ -279,17 +315,56 @@ impl Oauth2 {
     pub async fn refresh_handle_response(
         &self,
         resp: reqwest::Response,
-    ) -> anyhow::Result<RefreshResult> {
-        let j = resp.json::<RefreshResponse>().await?;
+    ) -> Result<RefreshResult, RefreshHandleResponseError> {
+        let dpop_nonce =
+            try_get_dpop_nonce(&resp).map_err(RefreshHandleResponseError::TryGetDpopNonce)?;
 
-        let now = chrono::Local::now();
-        let expires_in = Duration::from_secs(u64::from(j.expires_in) - 5u64);
+        let status = resp.status();
+        if status.is_success() {
+            let j = resp.json::<RefreshResponseSuccess>().await.map_err(|err| {
+                RefreshHandleResponseError::JsonDecode(err, "RefreshResponseSuccess".to_string())
+            })?;
 
-        Ok(RefreshResult {
-            access_token: j.access_token,
-            expires_at: now + expires_in,
-            scope: j.scope,
-        })
+            let now = chrono::Local::now();
+            let expires_in = Duration::from_secs(u64::from(j.expires_in) - 5u64);
+
+            if self.cfg.key_data.is_some() && dpop_nonce.is_none() {
+                return Err(RefreshHandleResponseError::ExpectedNonce);
+            }
+
+            return Ok(RefreshResult {
+                access_token: j.access_token,
+                expires_at: now + expires_in,
+                scope: j.scope,
+                dpop_nonce,
+            });
+        }
+
+        let status_code = status.as_u16();
+        let canonical_reason_str = status.canonical_reason().unwrap_or("<unknown>").to_string();
+        if status.is_client_error() {
+            let j = resp.json::<RefreshResponseError>().await.map_err(|err| {
+                RefreshHandleResponseError::JsonDecode(err, "RefreshResponseError".to_string())
+            })?;
+
+            return Err(if j.error == "use_dpop_nonce" {
+                let dpop_nonce =
+                    dpop_nonce.ok_or(RefreshHandleResponseError::UseDpopNonceButNoNonceGiven(
+                        j.error_description.clone(),
+                    ))?;
+                RefreshHandleResponseError::UseDpopNonce {
+                    error_description: j.error_description,
+                    dpop_nonce,
+                }
+            } else {
+                RefreshHandleResponseError::OtherClient(status_code, canonical_reason_str)
+            });
+        }
+
+        Err(RefreshHandleResponseError::Server(
+            status_code,
+            canonical_reason_str,
+        ))
     }
 
     /// Hashes and encodes the `code_verifier`. See
@@ -353,14 +428,12 @@ impl Oauth2 {
 
     /// Creates an http request for the token exchange.
     fn get_exchange_request(&self) -> anyhow::Result<reqwest::RequestBuilder> {
-        Ok(reqwest::Client::new()
+        let code = self.code.as_ref().ok_or(anyhow::anyhow!("code is None"))?;
+        let mut request_builder = reqwest::Client::new()
             .post(self.cfg.token_server_url.as_str())
             .form(&[
                 ("client_id", self.cfg.client_id.as_str()),
-                (
-                    "code",
-                    self.code.as_ref().ok_or(anyhow::anyhow!("code is None"))?,
-                ),
+                ("code", code),
                 (
                     "code_verifier",
                     self.code_verifier
@@ -379,7 +452,13 @@ impl Oauth2 {
                     .as_str(),
                 ),
                 ("client_secret", self.cfg.client_secret.as_str()),
-            ]))
+            ]);
+        if let Some(key_data) = self.cfg.key_data.as_ref() {
+            let dpop = dpop::create_auth(key_data, code, &self.cfg.token_server_url)?;
+            request_builder = request_builder.header("DPoP", dpop);
+        }
+
+        Ok(request_builder)
     }
 
     /// Sends the exchange request.
@@ -392,7 +471,7 @@ impl Oauth2 {
 
     /// Creates a token refresh request.
     fn get_refresh_request(&self) -> anyhow::Result<reqwest::RequestBuilder> {
-        Ok(reqwest::Client::new()
+        let mut request_builder = reqwest::Client::new()
             .post(self.cfg.token_server_url.as_str())
             .form(&[
                 ("client_id", self.cfg.client_id.as_str()),
@@ -405,7 +484,20 @@ impl Oauth2 {
                         .as_ref()
                         .ok_or(anyhow::anyhow!("refresh_token is None"))?,
                 ),
-            ]))
+            ]);
+        if let Some(key_data) = self.cfg.key_data.as_ref() {
+            let dpop = dpop::create_refresh(
+                key_data,
+                &self.cfg.token_server_url,
+                self.cfg
+                    .dpop_nonce
+                    .as_ref()
+                    .ok_or(anyhow::anyhow!("dpop_nonce is None"))?,
+            )?;
+            request_builder = request_builder.header("DPoP", dpop);
+        }
+
+        Ok(request_builder)
     }
 
     /// Sends the token refresh request.
@@ -415,6 +507,44 @@ impl Oauth2 {
     ) -> anyhow::Result<reqwest::Response> {
         Ok(request.send().await?)
     }
+}
+
+/// Returned error type for `refresh_handle_response()`.
+#[derive(thiserror::Error, Debug)]
+pub enum RefreshHandleResponseError {
+    /// Wrapped error from `try_get_dpop_nonce()`.
+    #[error("failed to try to get DPoP nonce header")]
+    TryGetDpopNonce(#[source] anyhow::Error),
+
+    /// Error decoding the server response as a given JSON type.
+    #[error("failed to decode as JSON type {1}")]
+    JsonDecode(#[source] reqwest::Error, String),
+
+    /// Returned when we are using DPoP, but the server didn't give us a nonce.
+    #[error("we sent a DPoP in the request, but didn't receive a nonce back")]
+    ExpectedNonce,
+
+    /// A `use_dpop_nonce` error returned from the server. This means that a DPoP nonce was
+    /// required but not provided, or that the provided nonce was invalid. The correct response is
+    /// to retry the request using the new `dpop_nonce` embedded in this error.
+    #[error("use_dpop_nonce: {error_description}")]
+    UseDpopNonce {
+        error_description: String,
+        dpop_nonce: String,
+    },
+
+    /// The server returned a `use_dpop_nonce` error, but didn't include a DPoP nonce in its
+    /// header.
+    #[error("use_dpop_nonce error returned, but without a DPoP nonce: {0}")]
+    UseDpopNonceButNoNonceGiven(String),
+
+    /// Any client error returned by the server except `use_dpop_nonce`.
+    #[error("client error {0}: {1}")]
+    OtherClient(u16, String),
+
+    /// Any server error returned by the server.
+    #[error("server error {0}: {1}")]
+    Server(u16, String),
 }
 
 /// Generates a cryptographically-random string using an alphabet of
@@ -431,4 +561,15 @@ fn create_code_verifier() -> anyhow::Result<String> {
         *item = ALPHABET[usize::try_from(rng.try_next_u32()?)? % ALPHABET_LEN];
     }
     Ok(from_utf8(&verifier)?.to_string())
+}
+
+/// Attempt to read a `DPoP-Nonce` header. If the header doesn't exist, `Ok(None)` is returned. If
+/// the header does exist, but cannot be converted into a string, an `Err` result will be returned.
+/// Otherwise, an `Ok(Some(String))` value will be returned containing the nonce.
+fn try_get_dpop_nonce(resp: &reqwest::Response) -> anyhow::Result<Option<String>> {
+    let dpop_nonce = resp.headers().get("DPoP-Nonce");
+    match dpop_nonce {
+        Some(nonce) => Ok(Some(nonce.to_str()?.to_string())),
+        None => Ok(None),
+    }
 }

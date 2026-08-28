@@ -92,6 +92,8 @@ impl Oauth2Simple {
                 token_server_url: client_info.installed.token_uri,
                 client_secret: client_info.installed.client_secret,
                 refresh_token,
+                key_data: None,
+                dpop_nonce: None,
             }),
             tokens_path: cfg.tokens_path.to_string(),
             tokens,

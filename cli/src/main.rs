@@ -134,6 +134,8 @@ async fn init(args: &Args, client_info: ClientInfo, listen_port: u16, scope: &st
         token_server_url: client_info.installed.token_uri,
         client_secret: client_info.installed.client_secret,
         refresh_token: None,
+        key_data: None,
+        dpop_nonce: None,
     });
 
     // Generate a URL that we can show the user, and start up an HTTP server.
@@ -205,6 +207,8 @@ async fn refresh(args: &Args, client_info: ClientInfo, tokens_path: &PathBuf) {
         token_server_url: client_info.installed.token_uri,
         client_secret: client_info.installed.client_secret,
         refresh_token: Some(tokens.refresh_token.clone()),
+        key_data: None,
+        dpop_nonce: None,
     });
 
     // Get a new access token from a refresh token.
