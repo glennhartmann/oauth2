@@ -42,7 +42,7 @@ impl KeyData {
 }
 
 impl From<&Keypair> for KeyData {
-    /// Attempts to extract `KeyData` from a `Keypair`.
+    /// Extracts `KeyData` from a `Keypair`.
     fn from(keypair: &Keypair) -> Self {
         let signing_key = SigningKey::from(&keypair.private_key);
 
