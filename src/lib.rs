@@ -80,8 +80,9 @@ struct ExchangeResponse {
 
     /// The authorized scope for the access and refresh tokens.
     scope: String,
-    // This should always be "Bearer".
-    // token_type: String, // TODO: parse and check this
+
+    /// This should always be "Bearer".
+    token_type: String,
 }
 
 /// The tokens returned from the Token Exchange part of the `auth` flow.
@@ -128,8 +129,9 @@ struct RefreshResponseSuccess {
 
     /// The API scope that the `access_token` is valid for.
     scope: String,
-    // Should always be "Bearer".
-    // token_type: String, // TODO: parse and check this
+
+    /// Should always be "Bearer".
+    token_type: String,
 }
 
 /// JSON error returned from the server for bad refresh requests.
@@ -287,6 +289,9 @@ impl Oauth2 {
         }
 
         let j = r.json::<ExchangeResponse>().await?;
+        if j.token_type != "Bearer" {
+            anyhow::bail!("unknown token_type: {} (expected 'Bearer')", j.token_type);
+        }
 
         let now = chrono::Local::now();
         let expires_in = Duration::from_secs(u64::from(j.expires_in) - 5u64);
@@ -325,6 +330,9 @@ impl Oauth2 {
             let j = resp.json::<RefreshResponseSuccess>().await.map_err(|err| {
                 RefreshHandleResponseError::JsonDecode(err, "RefreshResponseSuccess".to_string())
             })?;
+            if j.token_type != "Bearer" {
+                return Err(RefreshHandleResponseError::UnknownTokenType(j.token_type));
+            }
 
             let now = chrono::Local::now();
             let expires_in = Duration::from_secs(u64::from(j.expires_in) - 5u64);
@@ -527,6 +535,10 @@ pub enum RefreshHandleResponseError {
     /// Error decoding the server response as a given JSON type.
     #[error("failed to decode as JSON type {1}")]
     JsonDecode(#[source] reqwest::Error, String),
+
+    /// Token type != "Bearer".
+    #[error("unknown token_type: {0} (expected 'Bearer')")]
+    UnknownTokenType(String),
 
     /// Returned when we are using DPoP, but the server didn't give us a nonce.
     #[error("we sent a DPoP in the request, but didn't receive a nonce back")]
