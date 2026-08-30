@@ -7,7 +7,8 @@ use dpop::KeyData;
 
 use chrono::DateTime;
 use rand::{
-    SeedableRng, TryRng,
+    SeedableRng,
+    distr::{Distribution, Uniform},
     rngs::{StdRng, SysRng},
 };
 use reqwest::Url;
@@ -560,12 +561,16 @@ fn create_code_verifier() -> anyhow::Result<String> {
     const ALPHABET: &[u8; ALPHABET_LEN] =
         b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
     const CODE_VERIFIER_LEN: usize = 128;
+
     let mut rng = StdRng::try_from_rng(&mut SysRng)?;
-    let mut verifier = [0; CODE_VERIFIER_LEN];
-    for item in verifier.iter_mut().take(CODE_VERIFIER_LEN) {
-        *item = ALPHABET[usize::try_from(rng.try_next_u32()?)? % ALPHABET_LEN];
-    }
-    Ok(from_utf8(&verifier)?.to_string())
+    let uniform = Uniform::new(0, ALPHABET_LEN)?;
+    let uniform_iter = uniform.sample_iter(&mut rng);
+
+    let verifier_bytes: Vec<u8> = uniform_iter
+        .take(CODE_VERIFIER_LEN)
+        .map(|c| ALPHABET[c])
+        .collect();
+    Ok(from_utf8(&verifier_bytes)?.to_string())
 }
 
 /// Attempt to read a `DPoP-Nonce` header. If the header doesn't exist, `Ok(None)` is returned. If
