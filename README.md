@@ -9,7 +9,7 @@ specifically for the Google flow for desktop applications, as documented
 For a more comprehensive solution, maybe check out
 https://docs.rs/oauth2/latest/oauth2/.
 
-[Docs](https://glennhartmann.github.io/oauth2/v0.0.4/oauth2/index.html)
+[Docs](https://glennhartmann.github.io/oauth2/v0.0.5/oauth2/index.html)
 
 _Disclaimer: This is a personal project. The views, code, and opinions
 expressed here are my own and do not represent those of my current or past
