@@ -11,7 +11,7 @@ use rand::{
     distr::{Distribution, Uniform},
     rngs::{StdRng, SysRng},
 };
-use reqwest::Url;
+use reqwest::{Url, redirect};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -435,30 +435,31 @@ impl Oauth2 {
     /// Creates an http request for the token exchange.
     fn get_exchange_request(&self) -> anyhow::Result<reqwest::RequestBuilder> {
         let code = self.code.as_ref().ok_or(anyhow::anyhow!("code is None"))?;
-        let mut request_builder = reqwest::Client::new()
-            .post(self.cfg.token_server_url.as_str())
-            .form(&[
-                ("client_id", self.cfg.client_id.as_str()),
-                ("code", code),
-                (
-                    "code_verifier",
-                    self.code_verifier
-                        .as_ref()
-                        .ok_or(anyhow::anyhow!("code_verifier is None"))?,
-                ),
-                ("grant_type", "authorization_code"),
-                (
-                    "redirect_uri",
-                    format!(
-                        "http://localhost:{}",
-                        self.cfg
-                            .listen_port
-                            .ok_or(anyhow::anyhow!("listen_port is None"))?
-                    )
-                    .as_str(),
-                ),
-                ("client_secret", self.cfg.client_secret.as_str()),
-            ]);
+        let client = reqwest::Client::builder()
+            .redirect(redirect::Policy::none())
+            .build()?;
+        let mut request_builder = client.post(self.cfg.token_server_url.as_str()).form(&[
+            ("client_id", self.cfg.client_id.as_str()),
+            ("code", code),
+            (
+                "code_verifier",
+                self.code_verifier
+                    .as_ref()
+                    .ok_or(anyhow::anyhow!("code_verifier is None"))?,
+            ),
+            ("grant_type", "authorization_code"),
+            (
+                "redirect_uri",
+                format!(
+                    "http://localhost:{}",
+                    self.cfg
+                        .listen_port
+                        .ok_or(anyhow::anyhow!("listen_port is None"))?
+                )
+                .as_str(),
+            ),
+            ("client_secret", self.cfg.client_secret.as_str()),
+        ]);
         if let Some(key_data) = self.cfg.key_data.as_ref() {
             let dpop = dpop::create_auth(key_data, code, &self.cfg.token_server_url)?;
             request_builder = request_builder.header("DPoP", dpop);
@@ -477,20 +478,21 @@ impl Oauth2 {
 
     /// Creates a token refresh request.
     fn get_refresh_request(&self) -> anyhow::Result<reqwest::RequestBuilder> {
-        let mut request_builder = reqwest::Client::new()
-            .post(self.cfg.token_server_url.as_str())
-            .form(&[
-                ("client_id", self.cfg.client_id.as_str()),
-                ("client_secret", self.cfg.client_secret.as_str()),
-                ("grant_type", "refresh_token"),
-                (
-                    "refresh_token",
-                    self.cfg
-                        .refresh_token
-                        .as_ref()
-                        .ok_or(anyhow::anyhow!("refresh_token is None"))?,
-                ),
-            ]);
+        let client = reqwest::Client::builder()
+            .redirect(redirect::Policy::none())
+            .build()?;
+        let mut request_builder = client.post(self.cfg.token_server_url.as_str()).form(&[
+            ("client_id", self.cfg.client_id.as_str()),
+            ("client_secret", self.cfg.client_secret.as_str()),
+            ("grant_type", "refresh_token"),
+            (
+                "refresh_token",
+                self.cfg
+                    .refresh_token
+                    .as_ref()
+                    .ok_or(anyhow::anyhow!("refresh_token is None"))?,
+            ),
+        ]);
         if let Some(key_data) = self.cfg.key_data.as_ref() {
             let dpop = dpop::create_refresh(
                 key_data,
