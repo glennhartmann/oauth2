@@ -1076,7 +1076,6 @@ dependencies = [
 [[package]]
 name = "oauth2"
 version = "0.0.5"
-source = "git+https://github.com/glennhartmann/oauth2.git?tag=v0.0.5-without-nix#894c759420c09981ec9745225da90967e58a9999"
 dependencies = [
  "anyhow",
  "axum",
