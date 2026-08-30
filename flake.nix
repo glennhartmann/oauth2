@@ -18,6 +18,11 @@
             lockFile = ./Cargo.lock;
           };
         };
+
+        cargoLockOutputHashes = {
+          "oauth2-0.0.5" = "sha256-tTZ7hO51BSAOi+9nAtuC2wY9i+wUdi+mkBgxwt7x+kg=";
+        };
+
         cli-manifest = (pkgs.lib.importTOML ./cli/Cargo.toml).package;
         oauth2-cli = pkgs.rustPlatform.buildRustPackage {
           pname = cli-manifest.name;
@@ -26,12 +31,10 @@
 
           cargoLock = {
             lockFile = ./cli/Cargo.lock;
-
-            outputHashes = {
-              "oauth2-0.0.4" = "sha256-YVYhPRZFMvshaCgHGf9YO9jMAUAigkoM+OyJQZOPjpo=";
-            };
+            outputHashes = cargoLockOutputHashes;
           };
         };
+
         simple-manifest = (pkgs.lib.importTOML ./simple/Cargo.toml).package;
         oauth2-simple = pkgs.rustPlatform.buildRustPackage {
           pname = simple-manifest.name;
@@ -40,16 +43,14 @@
 
           cargoLock = {
             lockFile = ./simple/Cargo.lock;
-
-            outputHashes = {
-              "oauth2-0.0.4" = "sha256-YVYhPRZFMvshaCgHGf9YO9jMAUAigkoM+OyJQZOPjpo=";
-            };
+            outputHashes = cargoLockOutputHashes;
           };
         };
+
         all-pkgs = [
             oauth2
-            # oauth2-cli
-            # oauth2-simple
+            oauth2-cli
+            oauth2-simple
         ];
         all = pkgs.symlinkJoin {
           name = "all";
